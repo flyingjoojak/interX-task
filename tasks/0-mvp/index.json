@@ -16,7 +16,8 @@
       "phase": 1,
       "name": "db-models",
       "status": "completed",
-      "started_at": "2026-04-18T20:50:52+0900"
+      "started_at": "2026-04-18T20:50:52+0900",
+      "completed_at": "2026-04-18T20:52:39+0900"
     },
     {
       "phase": 2,
