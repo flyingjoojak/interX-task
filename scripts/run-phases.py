@@ -19,6 +19,11 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
+# Windows UTF-8 fix
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from _utils import find_project_root, resolve_gh_env
 
 ROOT = find_project_root()
@@ -92,7 +97,8 @@ def load_phase_prompt(task_dir: Path, phase_num: int) -> str:
 def git_run(*args, env: Optional[dict] = None) -> subprocess.CompletedProcess:
     run_env = {**os.environ, **env} if env else None
     return subprocess.run(
-        ["git", *args], cwd=str(ROOT), capture_output=True, text=True, env=run_env
+        ["git", *args], cwd=str(ROOT), capture_output=True, text=True,
+        encoding="utf-8", errors="replace", env=run_env
     )
 
 
@@ -263,23 +269,23 @@ def run_phase(task_dir: Path, phase: dict, preamble: str, gh_env: dict[str, str]
         full_prompt,
     ]
 
+    run_env = {**os.environ, **(gh_env or {}), "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(
         cmd,
         cwd=str(ROOT),
         capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
         timeout=1800,  # 30 minutes per phase
-        env={**os.environ, **gh_env} if gh_env else None,
+        env=run_env,
     )
+    stdout_text = result.stdout.decode("utf-8", errors="replace") if isinstance(result.stdout, bytes) else (result.stdout or "")
+    stderr_text = result.stderr.decode("utf-8", errors="replace") if isinstance(result.stderr, bytes) else (result.stderr or "")
 
     output_data = {
         "phase": phase_num,
         "name": phase_name,
         "exitCode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        "stdout": stdout_text,
+        "stderr": stderr_text,
     }
 
     with open(output_file, "w", encoding="utf-8") as f:
@@ -287,7 +293,7 @@ def run_phase(task_dir: Path, phase: dict, preamble: str, gh_env: dict[str, str]
 
     if result.returncode != 0:
         print(f"\n  WARN: Claude exited with code {result.returncode}")
-        print(f"  stderr: {result.stderr[:500]}")
+        print(f"  stderr: {stderr_text[:500]}")
 
     return output_data
 
