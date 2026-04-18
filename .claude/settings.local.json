@@ -5,7 +5,8 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(where claude *)",
-      "Bash(claude --version)"
+      "Bash(claude --version)",
+      "Bash(python *)"
     ]
   }
 }
