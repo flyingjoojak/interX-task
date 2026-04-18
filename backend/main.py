@@ -6,6 +6,7 @@ import models
 from api.auth import router as auth_router
 from api.candidates import router as candidates_router
 from api.documents import router as documents_router
+from api.analysis import router as analysis_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -22,6 +23,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(candidates_router, prefix="/api/candidates", tags=["candidates"])
 app.include_router(documents_router, prefix="/api", tags=["documents"])
+app.include_router(analysis_router, prefix="/api", tags=["analysis"])
 
 
 @app.get("/health")
