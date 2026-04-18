@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/run-phases.py 0-mvp)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(where claude *)",
+      "Bash(claude --version)"
+    ]
+  }
+}

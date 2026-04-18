@@ -82,7 +82,7 @@ def load_phase_prompt(task_dir: Path, phase_num: int) -> str:
     if not phase_file.exists():
         print(f"ERROR: {phase_file} not found")
         sys.exit(1)
-    return phase_file.read_text()
+    return phase_file.read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -254,8 +254,9 @@ def run_phase(task_dir: Path, phase: dict, preamble: str, gh_env: dict[str, str]
 
     output_file = task_dir / f"phase{phase_num}-output.json"
 
+    claude_cmd = "claude.cmd" if sys.platform == "win32" else "claude"
     cmd = [
-        "claude",
+        claude_cmd,
         "-p",
         "--dangerously-skip-permissions",
         "--output-format", "json",
@@ -267,6 +268,8 @@ def run_phase(task_dir: Path, phase: dict, preamble: str, gh_env: dict[str, str]
         cwd=str(ROOT),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=1800,  # 30 minutes per phase
         env={**os.environ, **gh_env} if gh_env else None,
     )
