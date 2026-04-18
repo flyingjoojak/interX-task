@@ -1,0 +1,23 @@
+{
+  "project": "InterX",
+  "task": "mvp",
+  "prompt": "plan-and-build skill 사용해서 이 서비스의 mvp를 전부 구현하자.",
+  "totalPhases": 14,
+  "created_at": "2026-04-18T12:00:00+0900",
+  "phases": [
+    { "phase": 0, "name": "project-setup", "status": "pending" },
+    { "phase": 1, "name": "db-models", "status": "pending" },
+    { "phase": 2, "name": "auth-api", "status": "pending" },
+    { "phase": 3, "name": "candidate-api", "status": "pending" },
+    { "phase": 4, "name": "ocr-services", "status": "pending" },
+    { "phase": 5, "name": "analysis-prompts", "status": "pending" },
+    { "phase": 6, "name": "analysis-agent", "status": "pending" },
+    { "phase": 7, "name": "analysis-api", "status": "pending" },
+    { "phase": 8, "name": "interview-agent-api", "status": "pending" },
+    { "phase": 9, "name": "frontend-foundation", "status": "pending" },
+    { "phase": 10, "name": "frontend-home-register", "status": "pending" },
+    { "phase": 11, "name": "frontend-report", "status": "pending" },
+    { "phase": 12, "name": "frontend-interview", "status": "pending" },
+    { "phase": 13, "name": "integration", "status": "pending" }
+  ]
+}
