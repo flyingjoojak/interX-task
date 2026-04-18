@@ -50,7 +50,9 @@
     {
       "phase": 6,
       "name": "analysis-agent",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-18T22:47:07+0900",
+      "completed_at": "2026-04-18T22:52:30+0900"
     },
     {
       "phase": 7,
