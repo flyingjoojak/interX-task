@@ -266,13 +266,13 @@ def run_phase(task_dir: Path, phase: dict, preamble: str, gh_env: dict[str, str]
         "-p",
         "--dangerously-skip-permissions",
         "--output-format", "json",
-        full_prompt,
     ]
 
     run_env = {**os.environ, **(gh_env or {}), "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(
         cmd,
         cwd=str(ROOT),
+        input=full_prompt.encode("utf-8"),
         capture_output=True,
         timeout=1800,  # 30 minutes per phase
         env=run_env,

@@ -6,7 +6,8 @@
       "Bash(git commit *)",
       "Bash(where claude *)",
       "Bash(claude --version)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(claude.cmd -p --output-format json)"
     ]
   }
 }
