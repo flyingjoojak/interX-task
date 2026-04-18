@@ -64,7 +64,10 @@
     {
       "phase": 8,
       "name": "interview-agent-api",
-      "status": "pending"
+      "status": "error",
+      "started_at": "2026-04-18T22:58:15+0900",
+      "error_message": "Claude did not update index.json status",
+      "failed_at": "2026-04-18T22:59:53+0900"
     },
     {
       "phase": 9,
