@@ -36,12 +36,15 @@
     {
       "phase": 4,
       "name": "ocr-services",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-18T22:34:57+0900",
+      "completed_at": "2026-04-18T22:37:19+0900"
     },
     {
       "phase": 5,
       "name": "analysis-prompts",
-      "status": "pending"
+      "status": "pending",
+      "started_at": "2026-04-18T22:45:13+0900"
     },
     {
       "phase": 6,
