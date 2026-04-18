@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from database import Base, engine
+import models
+
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(title="InterX API", version="0.1.0")
 
 app.add_middleware(
