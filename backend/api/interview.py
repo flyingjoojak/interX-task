@@ -171,6 +171,20 @@ def create_qa(
     return _qa_to_response(qa)
 
 
+@router.delete("/interview/qa/{qa_id}")
+def delete_qa(
+    qa_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    qa = db.query(QAPair).filter(QAPair.id == qa_id).one_or_none()
+    if qa is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Q&A를 찾을 수 없습니다")
+    db.delete(qa)
+    db.commit()
+    return {"message": "삭제 완료"}
+
+
 @router.patch("/interview/qa/{qa_id}", response_model=QAPairResponse)
 async def answer_qa(
     qa_id: str,
@@ -192,23 +206,20 @@ async def answer_qa(
 
     qa.answer_text = body.answer_text
     qa.answered_at = datetime.utcnow()
+    qa.followup_questions = None  # pending 상태로 초기화 → 프론트 폴링이 생성 중임을 인식
     session.last_accessed_at = datetime.utcnow()
     db.commit()
-
-    followups: list = []
-    try:
-        from agents.interview_graph import generate_followup_questions
-
-        followups = await generate_followup_questions(
-            candidate_id=session.candidate_id,
-            question=qa.question_text or "",
-            answer=body.answer_text or "",
-            session_id=session.id,
-        )
-    except Exception:
-        followups = []
-
-    qa.followup_questions = json.dumps(followups or [], ensure_ascii=False)
-    db.commit()
     db.refresh(qa)
+
+    from services.followup_worker import enqueue_followup
+
+    await enqueue_followup(
+        qa_id=qa.id,
+        candidate_id=session.candidate_id,
+        session_id=session.id,
+        question=qa.question_text or "",
+        answer=body.answer_text or "",
+        question_source=qa.question_source or "pregenerated",
+    )
+
     return _qa_to_response(qa)

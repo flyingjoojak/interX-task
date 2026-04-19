@@ -12,7 +12,7 @@ from models.candidate import Candidate
 from models.document import Document
 
 CLAUDE_MODEL = "claude-sonnet-4-6"
-DEFAULT_MAX_TOKENS = 4096
+DEFAULT_MAX_TOKENS = 16384
 API_SLEEP_SECONDS = 0.5
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
@@ -58,6 +58,11 @@ def _call_claude(prompt: str, max_tokens: int = DEFAULT_MAX_TOKENS) -> str:
         if text:
             parts.append(text)
     time.sleep(API_SLEEP_SECONDS)
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise ValueError(
+            f"Claude 응답이 max_tokens({max_tokens}) 한도에서 잘렸습니다. "
+            "max_tokens를 늘리거나 입력 문서를 줄여주세요."
+        )
     return "\n".join(parts)
 
 
@@ -108,6 +113,7 @@ def _reset_analysis(candidate_id: str) -> None:
         row.summary = None
         row.current_step = "OCR"
         row.step_started_at = datetime.utcnow()
+        row.error_message = None
         db.commit()
     finally:
         db.close()
@@ -136,6 +142,7 @@ def _save_analysis_result(
         row.summary = summary or ""
         row.current_step = "완료"
         row.step_started_at = datetime.utcnow()
+        row.error_message = None
         db.commit()
 
         cand = db.query(Candidate).filter(Candidate.id == candidate_id).one_or_none()
@@ -146,7 +153,25 @@ def _save_analysis_result(
         db.close()
 
 
-def _mark_error(candidate_id: str) -> None:
+def _summarize_error(exc: BaseException) -> str:
+    msg = str(exc) or exc.__class__.__name__
+    low = msg.lower()
+    if "credit balance is too low" in low or "credit balance" in low:
+        return "Anthropic API 크레딧이 부족합니다. 결제 페이지에서 크레딧을 충전해주세요."
+    if "invalid x-api-key" in low or "authentication" in low or "401" in msg:
+        return "Anthropic API 키가 올바르지 않습니다. backend/.env의 ANTHROPIC_API_KEY를 확인해주세요."
+    if "rate limit" in low or "429" in msg:
+        return "Anthropic API 호출 한도에 도달했습니다. 잠시 후 다시 시도해주세요."
+    if "connection" in low or "timeout" in low:
+        return "Anthropic API 연결에 실패했습니다. 네트워크 상태를 확인해주세요."
+    if "max_tokens" in low:
+        return msg
+    if "claude json 파싱 실패" in low or "expecting" in low or "json" in low:
+        return f"Claude 응답이 올바른 JSON이 아닙니다. ({msg[:200]})"
+    return msg[:500]
+
+
+def _mark_error(candidate_id: str, message: str | None = None) -> None:
     db = SessionLocal()
     try:
         row = db.query(Analysis).filter(Analysis.candidate_id == candidate_id).one_or_none()
@@ -155,6 +180,38 @@ def _mark_error(candidate_id: str) -> None:
             db.add(row)
         row.current_step = "오류"
         row.step_started_at = datetime.utcnow()
+        if message:
+            row.error_message = message[:1000]
+        db.commit()
+
+        cand = db.query(Candidate).filter(Candidate.id == candidate_id).one_or_none()
+        if cand is not None and cand.status == "분석중":
+            cand.status = "미분석"
+            db.commit()
+    finally:
+        db.close()
+
+
+def _persist_ocr_text(
+    doc_id: str,
+    text: str,
+    method: str | None = None,
+    quality: float | None = None,
+) -> None:
+    """추출된 OCR 텍스트를 documents 테이블에 저장."""
+    db = SessionLocal()
+    try:
+        row = db.query(Document).filter(Document.id == doc_id).one_or_none()
+        if row is None:
+            return
+        row.ocr_text = text or ""
+        if method:
+            row.ocr_method = method
+        if quality is not None:
+            try:
+                row.ocr_quality_score = float(quality)
+            except (TypeError, ValueError):
+                pass
         db.commit()
     finally:
         db.close()
@@ -209,6 +266,6 @@ async def run_analysis(candidate_id: str) -> None:
 
     try:
         await analysis_graph.ainvoke(initial_state)
-    except Exception:
-        _mark_error(candidate_id)
+    except Exception as exc:
+        _mark_error(candidate_id, _summarize_error(exc))
         raise

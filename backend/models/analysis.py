@@ -20,5 +20,6 @@ class Analysis(Base):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     current_step: Mapped[str | None] = mapped_column(Text, nullable=True)
     step_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -12,7 +12,9 @@ from agents.prompts import (
 from services.anonymizer import anonymize, restore
 from services.analysis_runner import (
     _mark_error,
+    _persist_ocr_text,
     _save_analysis_result,
+    _summarize_error,
     _update_step,
     call_claude_json,
     call_claude_text,
@@ -42,8 +44,8 @@ def _node_guard(candidate_id: str, step: str, fn):
     try:
         _update_step(candidate_id, step)
         return fn()
-    except Exception:
-        _mark_error(candidate_id)
+    except Exception as exc:
+        _mark_error(candidate_id, f"[{step}] {_summarize_error(exc)}")
         raise
 
 
@@ -52,6 +54,7 @@ def parse_documents(state: AnalysisState) -> dict:
         resume_text = ""
         portfolio_text = ""
         for doc in state.get("documents", []):
+            doc_id = doc.get("id")
             doc_type = doc.get("doc_type")
             file_path = doc.get("file_path", "")
             file_type = doc.get("file_type", "")
@@ -60,13 +63,17 @@ def parse_documents(state: AnalysisState) -> dict:
                 if cached:
                     resume_text = cached
                 elif file_path:
-                    text, _method, _score = extract_resume_text(file_path, file_type)
+                    text, method, quality = extract_resume_text(file_path, file_type)
                     resume_text = text or ""
+                    if doc_id:
+                        _persist_ocr_text(doc_id, resume_text, method, quality)
             elif doc_type == "portfolio":
                 if cached:
                     portfolio_text = cached
                 elif file_path:
                     portfolio_text = extract_portfolio_text(file_path, file_type) or ""
+                    if doc_id:
+                        _persist_ocr_text(doc_id, portfolio_text, "claude_vision", None)
         return {"resume_text": resume_text, "portfolio_text": portfolio_text}
 
     return _node_guard(state["candidate_id"], "OCR", _do)
@@ -237,8 +244,8 @@ def compile_and_restore(state: AnalysisState) -> dict:
             "preemptive_questions": preemptive_questions,
             "summary": summary,
         }
-    except Exception:
-        _mark_error(candidate_id)
+    except Exception as exc:
+        _mark_error(candidate_id, f"[완료] {_summarize_error(exc)}")
         raise
 
 

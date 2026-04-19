@@ -27,27 +27,30 @@ STRUCTURED_EXTRACTION_PROMPT = """당신은 한국어 이력서/포트폴리오 
 [추출 지침]
 - 한국 이력서 특성을 반영하여 직책/직급(예: 사원, 대리, 과장)과 고용 형태(정규직/인턴/계약직)를 가능한 구분해 `role`에 명시.
 - 연봉/성과 수치가 있다면 반드시 `quantified_result`에 원문 그대로 기재(예: "매출 30% 향상", "연봉 5,400만원").
-- 날짜는 반드시 `YYYY.MM` 형식으로 통일. 재직 중이면 `end`를 `재직중`으로 표기. 월 정보가 없으면 `YYYY.01`로 보정.
+- 날짜는 반드시 `YYYY.MM.DD` 형식으로 통일. 재직 중이면 `end`를 `재직중`으로 표기.
+  - 원문에 일(day)이 없고 월까지만 있으면 시작일은 `YYYY.MM.01`, 종료일은 `YYYY.MM.말일` 규칙으로 보정하되, 불확실하면 `YYYY.MM.01`로 통일.
+  - 원문에 월도 없이 연도만 있으면 `YYYY.01.01`로 보정.
+- 프로젝트의 `period`는 "YYYY.MM.DD ~ YYYY.MM.DD" (또는 재직중) 형식의 자유 문자열.
 - 원문에 없는 정보는 추측하지 말고 해당 필드를 빈 문자열("") 또는 빈 배열([])로 두세요.
 - 동일 경력이 여러 번 언급되면 한 번만 기록하되, 상세 설명은 가장 구체적인 쪽을 선택.
 
 [출력 JSON 스키마]
 {{
   "career": [
-    {{"company": "", "role": "", "start": "YYYY.MM", "end": "YYYY.MM or 재직중", "description": ""}}
+    {{"company": "", "role": "", "start": "YYYY.MM.DD", "end": "YYYY.MM.DD or 재직중", "description": ""}}
   ],
   "education": [
-    {{"school": "", "major": "", "degree": "", "start": "YYYY.MM", "end": "YYYY.MM"}}
+    {{"school": "", "major": "", "degree": "", "start": "YYYY.MM.DD", "end": "YYYY.MM.DD"}}
   ],
   "skills": ["기술1", "기술2"],
   "achievements": [
     {{"title": "", "description": "", "quantified_result": "수치화된 성과 (없으면 null)"}}
   ],
   "certifications": [
-    {{"name": "", "issuer": "", "date": "YYYY.MM"}}
+    {{"name": "", "issuer": "", "date": "YYYY.MM.DD"}}
   ],
   "projects": [
-    {{"name": "", "role": "", "period": "", "description": "", "tech_stack": []}}
+    {{"name": "", "role": "", "period": "YYYY.MM.DD ~ YYYY.MM.DD", "description": "", "tech_stack": []}}
   ]
 }}
 
@@ -202,7 +205,12 @@ PREEMPTIVE_QUESTIONS_PROMPT = """당신은 실제 경험 여부를 검증하는 
 """
 
 
-INTERVIEW_FOLLOWUP_PROMPT = """당신은 실시간 면접에서 면접관에게 즉시 사용 가능한 압박 꼬리질문을 제공하는 AI 보조자입니다. 후보자의 답변에서 가장 취약한 지점을 파고드는 꼬리질문 3~5개를 생성하세요.
+INTERVIEW_FOLLOWUP_PROMPT = """당신은 실시간 면접에서 면접관에게 즉시 사용 가능한 압박 꼬리질문을 제공하는 AI 보조자입니다. 질문의 출처(사전/커스텀/꼬리질문)에 관계없이 후보자의 이번 답변에서 가장 취약한 지점을 파고드는 꼬리질문을 **반드시 3~5개 생성**하세요. 빈 배열은 허용되지 않습니다.
+
+[질문 출처 정보]
+- source = "{question_source}" (pregenerated=사전 압박 질문, custom=면접관이 직접 추가한 질문, followup=이전 답변에서 파생된 꼬리질문)
+- custom: 면접관이 방금 만든 질문이므로 자유롭게 약점을 파고드세요.
+- followup: 이미 한 번 파고든 뒤에도 답변이 여전히 모호/과장/불일치를 남길 수 있으므로, 이번 답변의 새 취약점을 더 깊게 드릴다운하세요. "이미 충분히 물어봤다"는 이유로 생성을 생략하지 마세요.
 
 [분석 항목]
 - 모호성: 추상적 표현, 수치 없는 성과, "열심히 했습니다"류의 답변.
@@ -215,6 +223,7 @@ INTERVIEW_FOLLOWUP_PROMPT = """당신은 실시간 면접에서 면접관에게 
 - 면접관이 즉시 읽고 사용할 수 있는 완성된 한 문장의 질문으로 작성.
 - 우선순위 순으로 정렬(priority 1이 가장 중요).
 - `reasoning`에는 이 질문을 선택한 이유(어떤 취약점을 노리는지)를 1~2문장으로.
+- 최소 3개, 최대 5개. 답변이 충실해 보여도 최소 3개는 반드시 생성.
 
 [이력서 요약(구조화 데이터)]
 {resume_summary}
@@ -300,7 +309,11 @@ def build_preemptive_questions_prompt(
 
 
 def build_followup_prompt(
-    resume_summary: dict, question: str, answer: str, history: list
+    resume_summary: dict,
+    question: str,
+    answer: str,
+    history: list,
+    question_source: str = "pregenerated",
 ) -> str:
     recent = (history or [])[-3:]
     return INTERVIEW_FOLLOWUP_PROMPT.format(
@@ -308,6 +321,7 @@ def build_followup_prompt(
         history=_dumps(recent),
         question=question or "(없음)",
         answer=answer or "(없음)",
+        question_source=question_source or "pregenerated",
         korean_instruction=KOREAN_INSTRUCTION,
         json_only_suffix=JSON_ONLY_SUFFIX,
     )

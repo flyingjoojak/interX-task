@@ -66,6 +66,7 @@ class InterviewState(TypedDict):
     values_context: dict
     current_question: str
     current_answer: str
+    current_question_source: str
     conversation_history: list
     answer_analysis: dict
     followup_questions: list
@@ -177,12 +178,14 @@ def generate_followups(state: InterviewState) -> dict:
         state.get("current_question") or "",
         state.get("current_answer") or "",
         state.get("conversation_history") or [],
+        state.get("current_question_source") or "pregenerated",
     )
     try:
-        data = call_claude_json(prompt, max_tokens=1024)
+        data = call_claude_json(prompt, max_tokens=2048)
         if not isinstance(data, list):
             data = []
-    except Exception:
+    except Exception as exc:
+        print(f"[interview-graph] followup generation failed: {exc}")
         data = []
     return {"followup_questions": data}
 
@@ -237,6 +240,7 @@ async def generate_followup_questions(
     question: str,
     answer: str,
     session_id: str,
+    question_source: str = "pregenerated",
 ) -> list[dict]:
     """interview_graph.ainvoke 래퍼. 꼬리질문 리스트 반환."""
     initial_state: InterviewState = {
@@ -245,12 +249,14 @@ async def generate_followup_questions(
         "values_context": {},
         "current_question": question or "",
         "current_answer": answer or "",
+        "current_question_source": question_source or "pregenerated",
         "conversation_history": [],
         "answer_analysis": {},
         "followup_questions": [],
     }
     try:
         result = await interview_graph.ainvoke(initial_state)
-    except Exception:
+    except Exception as exc:
+        print(f"[interview-graph] ainvoke failed: {exc}")
         return []
     return result.get("followup_questions") or []

@@ -1,23 +1,21 @@
 import base64
 import io
-import os
 
 import fitz
 from PIL import Image
 
 from config import settings
-from services.ppt_service import extract_ppt_text
 
-QUALITY_THRESHOLD = 0.7
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 CLAUDE_VISION_MODEL = "claude-sonnet-4-6"
 CLAUDE_MAX_TOKENS = 4096
 VISION_PROMPT = (
-    "이 이미지의 모든 텍스트를 추출하여 원문 그대로 반환하세요. "
-    "서식은 무시하고 텍스트 내용만 반환하세요."
+    "이 이미지의 모든 텍스트를 **시각적으로 읽는 순서 그대로** 추출하세요. "
+    "- 위에서 아래로, 같은 줄이면 왼쪽에서 오른쪽으로.\n"
+    "- 2단 이상 컬럼이면 좌측 컬럼 전체를 먼저 다 읽고 그다음 우측 컬럼으로 이동.\n"
+    "- 각 프로젝트/경력 블록의 제목·기간·기술스택·설명은 **같은 블록끼리 붙여서** 반환.\n"
+    "- 서식(굵기, 색, 폰트)은 무시하고 텍스트 내용만."
 )
-
-_paddle_ocr = None
 
 
 def _calc_quality(text: str, page_count: int) -> float:
@@ -51,11 +49,6 @@ def _compress_png_if_needed(png_bytes: bytes, max_bytes: int = MAX_IMAGE_BYTES) 
     return buf.getvalue()
 
 
-def _read_image_bytes(file_path: str) -> bytes:
-    with open(file_path, "rb") as f:
-        return f.read()
-
-
 def _image_to_png_bytes(file_path: str) -> bytes:
     img = Image.open(file_path)
     if img.mode not in ("RGB", "RGBA"):
@@ -63,58 +56,6 @@ def _image_to_png_bytes(file_path: str) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
-
-
-def _pymupdf_extract(file_path: str) -> tuple[str, float]:
-    doc = fitz.open(file_path)
-    try:
-        text = "".join(page.get_text() for page in doc)
-        quality = _calc_quality(text, len(doc))
-    finally:
-        doc.close()
-    return text, quality
-
-
-def _get_paddle_ocr():
-    global _paddle_ocr
-    if _paddle_ocr is None:
-        from paddleocr import PaddleOCR  # type: ignore
-
-        _paddle_ocr = PaddleOCR(use_angle_cls=True, lang="korean", show_log=False)
-    return _paddle_ocr
-
-
-def _paddle_extract_from_image_bytes(img_bytes: bytes) -> str:
-    import numpy as np  # type: ignore
-
-    ocr = _get_paddle_ocr()
-    img = Image.open(io.BytesIO(img_bytes))
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    arr = np.array(img)
-    result = ocr.ocr(arr, cls=True)
-    lines: list[str] = []
-    if result:
-        for page_result in result:
-            if not page_result:
-                continue
-            for line in page_result:
-                if line and len(line) >= 2 and line[1]:
-                    lines.append(line[1][0])
-    return "\n".join(lines)
-
-
-def _paddle_extract(file_path: str, file_type: str) -> tuple[str, float]:
-    if file_type == "pdf":
-        pngs = _pdf_to_pngs(file_path)
-        page_texts = [_paddle_extract_from_image_bytes(p) for p in pngs]
-        text = "\n".join(page_texts)
-        quality = _calc_quality(text, len(pngs))
-    else:
-        png = _image_to_png_bytes(file_path)
-        text = _paddle_extract_from_image_bytes(png)
-        quality = _calc_quality(text, 1)
-    return text, quality
 
 
 def _claude_vision_extract_page(client, png_bytes: bytes) -> str:
@@ -166,27 +107,7 @@ def _claude_vision_extract(file_path: str, file_type: str) -> tuple[str, float]:
 
 
 def extract_resume_text(file_path: str, file_type: str) -> tuple[str, str, float]:
-    """이력서 OCR: PyMuPDF → PaddleOCR → Claude Vision 3단계 폴백."""
+    """이력서 텍스트 추출: PDF/JPG/PNG 모두 Claude Vision."""
     ft = (file_type or "").lower().lstrip(".")
-
-    if ft in ("ppt", "pptx"):
-        text = extract_ppt_text(file_path)
-        quality = 1.0 if text.strip() else 0.0
-        return text, "pptx", quality
-
-    if ft == "pdf":
-        text, quality = _pymupdf_extract(file_path)
-        if quality >= QUALITY_THRESHOLD:
-            return text, "pymupdf", quality
-
-    try:
-        text, quality = _paddle_extract(file_path, ft if ft == "pdf" else "image")
-        if quality >= QUALITY_THRESHOLD:
-            return text, "paddleocr", quality
-    except ImportError:
-        pass
-    except Exception:
-        pass
-
-    text, quality = _claude_vision_extract(file_path, ft if ft == "pdf" else "image")
+    text, quality = _claude_vision_extract(file_path, "pdf" if ft == "pdf" else "image")
     return text, "claude_vision", quality

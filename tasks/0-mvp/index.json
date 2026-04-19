@@ -64,35 +64,44 @@
     {
       "phase": 8,
       "name": "interview-agent-api",
-      "status": "error",
+      "status": "completed",
       "started_at": "2026-04-18T22:58:15+0900",
-      "error_message": "Claude did not update index.json status",
-      "failed_at": "2026-04-18T22:59:53+0900"
+      "completed_at": "2026-04-19T12:00:00+0900"
     },
     {
       "phase": 9,
       "name": "frontend-foundation",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-19T13:00:00+0900",
+      "completed_at": "2026-04-19T13:20:00+0900"
     },
     {
       "phase": 10,
       "name": "frontend-home-register",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-19T13:25:00+0900",
+      "completed_at": "2026-04-19T13:45:00+0900"
     },
     {
       "phase": 11,
       "name": "frontend-report",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-19T13:50:00+0900",
+      "completed_at": "2026-04-19T14:05:00+0900"
     },
     {
       "phase": 12,
       "name": "frontend-interview",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-19T14:10:00+0900",
+      "completed_at": "2026-04-19T14:25:00+0900"
     },
     {
       "phase": 13,
       "name": "integration",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-19T14:30:00+0900",
+      "completed_at": "2026-04-19T14:40:00+0900"
     }
   ]
 }

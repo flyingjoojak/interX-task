@@ -10,6 +10,7 @@ class AnalysisProgressResponse(BaseModel):
     step_started_at: Optional[datetime] = None
     estimated_remaining_seconds: Optional[int] = None
     progress_percent: int = 0
+    error_message: Optional[str] = None
 
 
 class AnalysisResponse(BaseModel):
@@ -21,3 +22,4 @@ class AnalysisResponse(BaseModel):
     preemptive_questions: Optional[list] = None
     summary: Optional[str] = None
     current_step: Optional[str] = None
+    error_message: Optional[str] = None

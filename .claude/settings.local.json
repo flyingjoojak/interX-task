@@ -7,7 +7,8 @@
       "Bash(where claude *)",
       "Bash(claude --version)",
       "Bash(python *)",
-      "Bash(claude.cmd -p --output-format json)"
+      "Bash(claude.cmd -p --output-format json)",
+      "Bash(npm run *)"
     ]
   }
 }

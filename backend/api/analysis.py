@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.analysis import Analysis
 from models.candidate import Candidate
+from models.document import Document
 from models.interview import InterviewSession, QAPair
 from models.user import User
 from schemas.analysis import AnalysisProgressResponse, AnalysisResponse
@@ -66,6 +67,7 @@ def _compute_progress(analysis: Analysis, candidate_id: str) -> AnalysisProgress
 
     current_step = analysis.current_step
     step_started_at = analysis.step_started_at
+    error_message = getattr(analysis, "error_message", None)
 
     if current_step == "완료":
         return AnalysisProgressResponse(
@@ -74,6 +76,7 @@ def _compute_progress(analysis: Analysis, candidate_id: str) -> AnalysisProgress
             step_started_at=step_started_at,
             estimated_remaining_seconds=0,
             progress_percent=100,
+            error_message=None,
         )
 
     if current_step == "오류":
@@ -83,6 +86,7 @@ def _compute_progress(analysis: Analysis, candidate_id: str) -> AnalysisProgress
             step_started_at=step_started_at,
             estimated_remaining_seconds=None,
             progress_percent=0,
+            error_message=error_message,
         )
 
     if current_step not in PROCESSING_STEPS:
@@ -93,6 +97,7 @@ def _compute_progress(analysis: Analysis, candidate_id: str) -> AnalysisProgress
             step_started_at=step_started_at,
             estimated_remaining_seconds=total,
             progress_percent=0,
+            error_message=error_message,
         )
 
     idx = PROCESSING_STEPS.index(current_step)
@@ -115,6 +120,7 @@ def _compute_progress(analysis: Analysis, candidate_id: str) -> AnalysisProgress
         step_started_at=step_started_at,
         estimated_remaining_seconds=estimated,
         progress_percent=progress_percent,
+        error_message=error_message,
     )
 
 
@@ -179,6 +185,7 @@ def get_analysis(
         preemptive_questions=_safe_json_loads(analysis.preemptive_questions),
         summary=analysis.summary,
         current_step=analysis.current_step,
+        error_message=getattr(analysis, "error_message", None),
     )
 
 
@@ -204,6 +211,42 @@ def delete_analysis(
 
     db.commit()
     return {"message": "분석이 초기화되었습니다"}
+
+
+@router.get("/candidates/{candidate_id}/debug/raw")
+def get_raw_debug(
+    candidate_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """진단용: OCR 원문 텍스트와 추출된 structured_data를 한 번에 반환."""
+    _get_candidate_or_404(db, candidate_id)
+
+    docs = (
+        db.query(Document)
+        .filter(Document.candidate_id == candidate_id)
+        .order_by(Document.created_at.asc())
+        .all()
+    )
+    analysis = db.query(Analysis).filter(Analysis.candidate_id == candidate_id).first()
+
+    return {
+        "candidate_id": candidate_id,
+        "documents": [
+            {
+                "id": d.id,
+                "doc_type": d.doc_type,
+                "file_type": d.file_type,
+                "original_name": d.original_name,
+                "ocr_method": d.ocr_method,
+                "ocr_quality_score": d.ocr_quality_score,
+                "ocr_text": d.ocr_text or "",
+                "ocr_text_length": len(d.ocr_text or ""),
+            }
+            for d in docs
+        ],
+        "structured_data": _safe_json_loads(analysis.structured_data) if analysis else None,
+    }
 
 
 @router.get("/candidates/{candidate_id}/report/pdf")

@@ -5,19 +5,14 @@ from fastapi import HTTPException, UploadFile, status
 
 from config import settings
 
-ALLOWED_RESUME = {".pdf", ".jpg", ".jpeg", ".png", ".ppt", ".pptx"}
-ALLOWED_PORTFOLIO = {".pdf", ".jpg", ".jpeg", ".png"}
+ALLOWED_EXTS = {".pdf", ".jpg", ".jpeg", ".png"}
 MAX_SIZE_BYTES = settings.MAX_FILE_SIZE_MB * 1024 * 1024
 
 ALLOWED_MIME = {
     "application/pdf",
     "image/jpeg",
     "image/png",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
-
-PPT_EXTS = {".ppt", ".pptx"}
 
 
 def _get_ext(filename: str) -> str:
@@ -38,17 +33,14 @@ def validate_file(file: UploadFile, doc_type: str, file_bytes: bytes) -> None:
         )
 
     ext = _get_ext(file.filename or "")
-    allowed_exts = ALLOWED_RESUME if doc_type == "resume" else ALLOWED_PORTFOLIO
-    if ext not in allowed_exts:
+    if ext not in ALLOWED_EXTS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"허용되지 않은 파일 확장자입니다: {ext}",
+            detail=f"허용되지 않은 파일 확장자입니다: {ext} (PDF/JPG/PNG만 지원)",
         )
 
     kind = filetype.guess(file_bytes)
     if kind is None:
-        if ext in PPT_EXTS:
-            return
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="파일 형식을 확인할 수 없습니다",
