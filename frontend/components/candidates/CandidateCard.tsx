@@ -19,6 +19,8 @@ export default function CandidateCard({ candidate, onDeleted, onStatusChanged }:
 
   const avg = candidate.avg_value_score
   const avgDisplay = typeof avg === 'number' ? Math.round(avg) : '-'
+  const reliability = candidate.doc_reliability_score
+  const reliabilityDisplay = typeof reliability === 'number' ? Math.round(reliability) : '-'
 
   return (
     <div className="bg-white border rounded-xl p-5 shadow-sm hover:shadow transition-shadow flex flex-col gap-3">
@@ -41,8 +43,9 @@ export default function CandidateCard({ candidate, onDeleted, onStatusChanged }:
         <Badge status={candidate.status} />
       </div>
 
-      <div className="text-sm text-gray-600">
-        가치 평균 점수: <span className="font-semibold text-gray-900">{avgDisplay}</span>
+      <div className="text-sm text-gray-600 space-y-1">
+        <div>가치 평균 점수: <span className="font-semibold text-gray-900">{avgDisplay}</span></div>
+        <div>문서 신뢰도: <span className="font-semibold text-gray-900">{reliabilityDisplay}</span></div>
       </div>
 
       <div className="flex gap-2 mt-2">

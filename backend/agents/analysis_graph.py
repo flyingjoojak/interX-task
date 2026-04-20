@@ -7,8 +7,10 @@ from agents.prompts import (
     build_extraction_prompt,
     build_preemptive_questions_prompt,
     build_reliability_prompt,
+    build_value_regeneration_prompt,
     build_value_scoring_prompt,
 )
+from services.evidence_verifier import merge_regenerated, verify_values_scores
 from services.anonymizer import anonymize, restore
 from services.analysis_runner import (
     _mark_error,
@@ -18,6 +20,7 @@ from services.analysis_runner import (
     _update_step,
     call_claude_json,
     call_claude_text,
+    usage_scope,
 )
 from services.ocr_service import extract_resume_text
 from services.portfolio_service import extract_portfolio_text
@@ -43,7 +46,8 @@ class AnalysisState(TypedDict):
 def _node_guard(candidate_id: str, step: str, fn):
     try:
         _update_step(candidate_id, step)
-        return fn()
+        with usage_scope(candidate_id, "analysis", step):
+            return fn()
     except Exception as exc:
         _mark_error(candidate_id, f"[{step}] {_summarize_error(exc)}")
         raise
@@ -119,6 +123,37 @@ def score_12_values(state: AnalysisState) -> dict:
         if not isinstance(data, dict):
             data = {}
         return {"values_scores": data}
+
+    return _node_guard(state["candidate_id"], "가치매핑", _do)
+
+
+def self_verify_evidence(state: AnalysisState) -> dict:
+    """values_scores 의 examples 가 이력서 원문에 실제 존재하는지 검증.
+
+    - substring + token-overlap 으로 sanity check
+    - 점수가 높은데 증거가 부실한 가치는 1회 재생성
+    - 재생성 결과도 다시 검증해 verification 메타데이터에 기록
+    """
+    def _do():
+        values_scores = state.get("values_scores", {}) or {}
+        resume_text = state.get("anonymized_resume", "") or ""
+        portfolio_text = state.get("anonymized_portfolio", "") or ""
+        source = (resume_text + "\n\n" + portfolio_text).strip()
+
+        annotated, failed = verify_values_scores(values_scores, source)
+
+        if not failed:
+            return {"values_scores": annotated}
+
+        try:
+            prompt = build_value_regeneration_prompt(resume_text, failed)
+            regenerated = call_claude_json(prompt, max_tokens=4096)
+            if isinstance(regenerated, dict):
+                annotated = merge_regenerated(annotated, regenerated, source)
+        except Exception as exc:
+            print(f"[self_verify] regeneration failed: {exc}")
+
+        return {"values_scores": annotated}
 
     return _node_guard(state["candidate_id"], "가치매핑", _do)
 
@@ -255,6 +290,7 @@ def build_analysis_graph():
     graph.add_node("anonymize_pii", anonymize_pii)
     graph.add_node("extract_structured_data", extract_structured_data)
     graph.add_node("score_12_values", score_12_values)
+    graph.add_node("self_verify_evidence", self_verify_evidence)
     graph.add_node("calculate_doc_reliability", calculate_doc_reliability)
     graph.add_node("detect_contradictions", detect_contradictions)
     graph.add_node("generate_preemptive_questions", generate_preemptive_questions)
@@ -264,7 +300,8 @@ def build_analysis_graph():
     graph.add_edge("parse_documents", "anonymize_pii")
     graph.add_edge("anonymize_pii", "extract_structured_data")
     graph.add_edge("extract_structured_data", "score_12_values")
-    graph.add_edge("score_12_values", "calculate_doc_reliability")
+    graph.add_edge("score_12_values", "self_verify_evidence")
+    graph.add_edge("self_verify_evidence", "calculate_doc_reliability")
     graph.add_edge("calculate_doc_reliability", "detect_contradictions")
     graph.add_edge("detect_contradictions", "generate_preemptive_questions")
     graph.add_edge("generate_preemptive_questions", "compile_and_restore")

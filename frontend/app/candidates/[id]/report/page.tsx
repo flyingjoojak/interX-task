@@ -15,6 +15,8 @@ import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
 import StatusSelector from '@/components/candidates/StatusSelector'
 import RawDataViewer from '@/components/report/RawDataViewer'
+import MemoModal from '@/components/report/MemoModal'
+import CostReport from '@/components/report/CostReport'
 
 const PROCESSING_STEPS = ['OCR', '추출', '가치매핑', '모순탐지', '질문생성']
 
@@ -30,6 +32,7 @@ export default function ReportPage() {
   const [authed, setAuthed] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [rawOpen, setRawOpen] = useState(false)
+  const [memoOpen, setMemoOpen] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -135,6 +138,9 @@ export default function ReportPage() {
             {!isAnalyzing && (
               <Button onClick={startAnalysis}>{isComplete || hasError ? '재분석' : '분석 시작'}</Button>
             )}
+            <Button variant="secondary" onClick={() => setMemoOpen(true)}>
+              📝 메모
+            </Button>
             <Button variant="secondary" onClick={() => setRawOpen(true)}>
               원본 데이터 보기
             </Button>
@@ -218,9 +224,22 @@ export default function ReportPage() {
               <h2 className="text-lg font-semibold mb-4">사전 압박 질문</h2>
               <PreemptiveQuestions questions={analysis.preemptive_questions || []} />
             </section>
+
+            <section className="bg-white border rounded-xl p-6">
+              <h2 className="text-lg font-semibold mb-4">Claude API 사용량 · 비용</h2>
+              <CostReport candidateId={candidate.id} />
+            </section>
           </div>
         )}
       </main>
+
+      <MemoModal
+        open={memoOpen}
+        candidateId={candidate.id}
+        initialMemo={candidate.interviewer_memo || ''}
+        onClose={() => setMemoOpen(false)}
+        onSaved={(memo) => setCandidate({ ...candidate, interviewer_memo: memo })}
+      />
 
       {selectedValue && (
         <EvidencePanel

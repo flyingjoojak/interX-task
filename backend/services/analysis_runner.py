@@ -1,7 +1,10 @@
+import contextvars
 import json
 import re
 import time
+from contextlib import contextmanager
 from datetime import datetime
+from typing import Optional
 
 import anthropic
 
@@ -14,6 +17,86 @@ from models.document import Document
 CLAUDE_MODEL = "claude-sonnet-4-6"
 DEFAULT_MAX_TOKENS = 16384
 API_SLEEP_SECONDS = 0.5
+
+
+MODEL_PRICING_USD_PER_MTOKEN: dict[str, dict[str, float]] = {
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cache_read": 0.3, "cache_write": 3.75},
+    "claude-opus-4-7":   {"input": 15.0, "output": 75.0, "cache_read": 1.5, "cache_write": 18.75},
+    "claude-haiku-4-5":  {"input": 0.8, "output": 4.0, "cache_read": 0.08, "cache_write": 1.0},
+}
+
+
+_usage_context: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar(
+    "usage_context", default=None
+)
+
+
+@contextmanager
+def usage_scope(candidate_id: Optional[str], phase: str, step: Optional[str] = None):
+    token = _usage_context.set({
+        "candidate_id": candidate_id,
+        "phase": phase,
+        "step": step,
+    })
+    try:
+        yield
+    finally:
+        _usage_context.reset(token)
+
+
+def _estimate_cost_usd(
+    model: str, input_tokens: int, output_tokens: int,
+    cache_read_tokens: int = 0, cache_creation_tokens: int = 0,
+) -> float:
+    pricing = MODEL_PRICING_USD_PER_MTOKEN.get(model)
+    if not pricing:
+        return 0.0
+    return round(
+        (input_tokens * pricing["input"]
+         + output_tokens * pricing["output"]
+         + cache_read_tokens * pricing.get("cache_read", 0)
+         + cache_creation_tokens * pricing.get("cache_write", 0)) / 1_000_000,
+        6,
+    )
+
+
+def record_usage(model: str, response) -> None:
+    ctx = _usage_context.get()
+    if ctx is None:
+        return
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return
+    input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+    output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+    cache_read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+    cache_creation = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+    cost = _estimate_cost_usd(model, input_tokens, output_tokens, cache_read, cache_creation)
+
+    from models.token_usage import TokenUsage
+    db = SessionLocal()
+    try:
+        row = TokenUsage(
+            candidate_id=ctx.get("candidate_id"),
+            phase=ctx.get("phase") or "unknown",
+            step=ctx.get("step"),
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read,
+            cache_creation_tokens=cache_creation,
+            cost_usd=cost,
+        )
+        db.add(row)
+        db.commit()
+    except Exception as exc:
+        print(f"[record_usage] failed: {exc}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        db.close()
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
@@ -52,6 +135,7 @@ def _call_claude(prompt: str, max_tokens: int = DEFAULT_MAX_TOKENS) -> str:
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
+    record_usage(CLAUDE_MODEL, response)
     parts: list[str] = []
     for block in response.content:
         text = getattr(block, "text", None)

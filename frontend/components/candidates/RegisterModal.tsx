@@ -104,7 +104,7 @@ export default function RegisterModal({ open, onClose, onRegistered }: Props) {
   }
 
   const dropzoneCls = (zone: 'resume' | 'portfolio') =>
-    `border-2 border-dashed rounded-lg p-4 text-center text-sm cursor-pointer transition-colors ${
+    `flex items-center justify-center min-h-[72px] border-2 border-dashed rounded-lg px-4 py-6 text-center text-sm cursor-pointer transition-colors ${
       dragZone === zone ? 'border-primary bg-primary-50' : 'border-gray-300 hover:border-primary'
     }`
 
@@ -138,7 +138,7 @@ export default function RegisterModal({ open, onClose, onRegistered }: Props) {
       ) : (
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-1">이력서 *</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">이력서 *</p>
             <label
               className={dropzoneCls('resume')}
               onDragOver={e => { e.preventDefault(); setDragZone('resume') }}
@@ -161,7 +161,7 @@ export default function RegisterModal({ open, onClose, onRegistered }: Props) {
             </label>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-1">포트폴리오 (선택)</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">포트폴리오 (선택)</p>
             <label
               className={dropzoneCls('portfolio')}
               onDragOver={e => { e.preventDefault(); setDragZone('portfolio') }}

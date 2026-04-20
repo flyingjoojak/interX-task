@@ -275,6 +275,40 @@ def build_value_scoring_prompt(resume_text: str, structured_data: dict) -> str:
     )
 
 
+VALUE_REGENERATION_PROMPT = """당신은 이전 단계 채점에서 examples(이력서 원문 인용)가 실제로 원문에 존재하지 않아 hallucination 의심을 받고 있는 가치 항목들을 재채점해야 합니다.
+
+[엄격 지침]
+- `examples`에 들어갈 문장은 **반드시 아래 이력서 원문에서 글자 그대로 복사해 오십시오**. 어떠한 변형(요약/의역/합성)도 금지.
+- 원문에 해당 가치를 지지할 직접 인용이 없다면 `examples`는 빈 배열([])로 두고 `score`를 30점 이하로 하향 조정하십시오.
+- 이전 점수가 높다는 이유로 증거를 만들어내면 안 됩니다. 증거 부재 시 점수를 반드시 낮추십시오.
+- `evidence`는 왜 이 점수인지 한 문장으로 요약.
+- 응답은 재채점 대상 가치만 포함하는 JSON 객체.
+
+[이력서 원문]
+{resume_text}
+
+[재채점 대상]
+{failed_block}
+
+[출력 JSON 스키마 — 각 가치별로]
+{{
+  "가치명": {{"score": 0, "evidence": "", "examples": ["원문에서 복사한 문장"]}}
+}}
+
+{korean_instruction}
+{json_only_suffix}
+"""
+
+
+def build_value_regeneration_prompt(resume_text: str, failed_values: dict) -> str:
+    return VALUE_REGENERATION_PROMPT.format(
+        resume_text=resume_text or "(없음)",
+        failed_block=_dumps(failed_values or {}),
+        korean_instruction=KOREAN_INSTRUCTION,
+        json_only_suffix=JSON_ONLY_SUFFIX,
+    )
+
+
 def build_reliability_prompt(resume_text: str, portfolio_text: str) -> str:
     return DOC_RELIABILITY_PROMPT.format(
         resume_text=resume_text or "(없음)",

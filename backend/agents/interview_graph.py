@@ -11,7 +11,7 @@ from agents.prompts import (
 from database import SessionLocal
 from models.analysis import Analysis
 from models.interview import InterviewSession, QAPair
-from services.analysis_runner import call_claude_json
+from services.analysis_runner import call_claude_json, usage_scope
 
 
 ANSWER_ANALYSIS_PROMPT = """당신은 실시간 면접 답변의 취약점을 빠르게 짚어내는 분석가입니다. 아래 질문과 답변을 읽고 모호성/불일치/과장 관점에서 한 문장씩 간단히 평가하세요.
@@ -158,7 +158,8 @@ def analyze_answer(state: InterviewState) -> dict:
         state.get("current_answer") or "",
     )
     try:
-        data = call_claude_json(prompt, max_tokens=512)
+        with usage_scope(state.get("candidate_id"), "interview", "analyze_answer"):
+            data = call_claude_json(prompt, max_tokens=512)
         if not isinstance(data, dict):
             data = {}
     except Exception:
@@ -181,7 +182,8 @@ def generate_followups(state: InterviewState) -> dict:
         state.get("current_question_source") or "pregenerated",
     )
     try:
-        data = call_claude_json(prompt, max_tokens=2048)
+        with usage_scope(state.get("candidate_id"), "interview", "generate_followups"):
+            data = call_claude_json(prompt, max_tokens=2048)
         if not isinstance(data, list):
             data = []
     except Exception as exc:

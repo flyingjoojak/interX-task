@@ -213,6 +213,70 @@ def delete_analysis(
     return {"message": "분석이 초기화되었습니다"}
 
 
+@router.get("/candidates/{candidate_id}/cost")
+def get_candidate_cost(
+    candidate_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """candidate 별 Claude API 실측 토큰/비용 집계."""
+    _get_candidate_or_404(db, candidate_id)
+    from models.token_usage import TokenUsage
+
+    rows = (
+        db.query(TokenUsage)
+        .filter(TokenUsage.candidate_id == candidate_id)
+        .order_by(TokenUsage.created_at.asc())
+        .all()
+    )
+
+    def _empty():
+        return {
+            "calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
+            "cost_usd": 0.0,
+        }
+
+    total = _empty()
+    by_phase: dict = {}
+    by_step: dict = {}
+    calls: list = []
+
+    for r in rows:
+        for bucket in (total, by_phase.setdefault(r.phase or "unknown", _empty()),
+                       by_step.setdefault(r.step or "unknown", _empty())):
+            bucket["calls"] += 1
+            bucket["input_tokens"] += r.input_tokens or 0
+            bucket["output_tokens"] += r.output_tokens or 0
+            bucket["cache_read_tokens"] += r.cache_read_tokens or 0
+            bucket["cache_creation_tokens"] += r.cache_creation_tokens or 0
+            bucket["cost_usd"] += r.cost_usd or 0
+
+        calls.append({
+            "phase": r.phase,
+            "step": r.step,
+            "model": r.model,
+            "input_tokens": r.input_tokens,
+            "output_tokens": r.output_tokens,
+            "cost_usd": r.cost_usd,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+
+    for bucket in (total, *by_phase.values(), *by_step.values()):
+        bucket["cost_usd"] = round(bucket["cost_usd"], 6)
+
+    return {
+        "candidate_id": candidate_id,
+        "total": total,
+        "by_phase": by_phase,
+        "by_step": by_step,
+        "calls": calls,
+    }
+
+
 @router.get("/candidates/{candidate_id}/debug/raw")
 def get_raw_debug(
     candidate_id: str,

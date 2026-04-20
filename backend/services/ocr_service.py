@@ -5,6 +5,7 @@ import fitz
 from PIL import Image
 
 from config import settings
+from services.analysis_runner import record_usage
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 CLAUDE_VISION_MODEL = "claude-sonnet-4-6"
@@ -81,6 +82,7 @@ def _claude_vision_extract_page(client, png_bytes: bytes) -> str:
             }
         ],
     )
+    record_usage(CLAUDE_VISION_MODEL, response)
     parts: list[str] = []
     for block in response.content:
         text = getattr(block, "text", None)
