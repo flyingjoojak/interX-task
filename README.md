@@ -107,7 +107,7 @@ npm run dev
 - `GET/POST /api/candidates` — 지원자 관리
 - `POST /api/documents/upload` — 문서 업로드 (OCR 포함)
 - `POST /api/analysis/run` — 분석 실행
-- `GET /api/interview/{id}` — 면��� 세션 조회
+- `GET /api/interview/{id}` — 면접 세션 조회
 - `POST /api/interview/{id}/answer` — 답변 제출
 
 ## 라이선스
